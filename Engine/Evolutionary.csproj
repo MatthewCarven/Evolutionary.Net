@@ -51,6 +51,7 @@
     <Compile Include="NodeBaseType.cs" />
     <Compile Include="CandidateSolution.cs" />
     <Compile Include="TerminalFunctionNode.cs" />
+    <Compile Include="TreeInspection.cs" />
     <Compile Include="VariableMetadata.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Randomizer.cs" />

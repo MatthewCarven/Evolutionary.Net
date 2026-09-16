@@ -141,5 +141,14 @@ namespace Evolutionary
                 return functionMetadata.NumArguments;
             }
         }
+
+        // the bare function name, without rendering the whole subtree like ToString() does
+        internal string FunctionName
+        {
+            get
+            {
+                return functionMetadata.Name;
+            }
+        }
     }
 }

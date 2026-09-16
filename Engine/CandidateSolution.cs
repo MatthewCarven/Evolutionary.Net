@@ -206,6 +206,10 @@ namespace Evolutionary
             // and all of the nodes in the tree
             newTree.Root = Root.Clone(null);
             newTree.Fitness = this.Fitness;
+
+            // cloned nodes still reference the original candidate for variables and state
+            // data, so re-point them at the clone before anyone evaluates it
+            newTree.Root.SetCandidateRef(newTree);
             return newTree;
         }
 
