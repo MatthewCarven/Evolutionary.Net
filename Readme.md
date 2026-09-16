@@ -199,6 +199,28 @@ The GP example here (a console app) loads in a set of sample data, uses 75% of i
 Results are written to two files: per-gen-stats.csv and test-results.csv.
 
 
+## Evolutionary Studio (GUI &amp; Examiner)
+
+The `Studio` folder contains **Evolutionary Studio**, a WPF desktop app that wraps the engine in a point-and-click symbolic-regression lab.  It needs the .NET 10 SDK on Windows (the engine itself and the original examples are unchanged and still build the classic way):
+
+```
+dotnet run --project Studio -c Release
+```
+
+What it does:
+
+- **Problem setup** — built-in target-function presets, or load any CSV (numeric columns are detected automatically, and the bike-sharing dataset ships as a preset).  Pick the target column, the input columns, the train/test split, and MAE or RMSE as the fitness metric.
+- **Primitive set & parameters** — toggle the function set (protected division, trig, powers, conditionals, …), edit the constant pool, and tune every `EngineParameters` field from the UI.
+- **Live evolution view** — best/average fitness charted per generation while the engine runs on a background thread, with a full generation history table and a Stop button.
+- **Examiner** — every time the best-so-far improves, a snapshot is kept.  For any snapshot you can see the expression as readable infix math, a color-coded expression-tree diagram with zoom, node/depth/usage statistics, a predicted-vs-actual plot with MAE/RMSE/R² on both train and test data, and a playground for evaluating the tree at hand-typed variable values.
+
+![Evolution view](images/studio_evolution.png)
+![Examiner tree view](images/studio_examiner_tree.png)
+
+To support the examiner, the engine gained a small public inspection API (`TreeInspection.GetTreeInfo()` returns a `TreeNodeInfo` snapshot of a candidate's tree), and `CandidateSolution.Clone()` now re-points cloned nodes at the clone so cloned candidates evaluate correctly on their own.
+
+`EvolutionaryStudio --smoke` runs a quick headless self-test; `EvolutionaryStudio --screenshot <dir>` runs a demo evolution and saves PNGs of each view.
+
 ## Contributing
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct, and the process for submitting pull requests to us.

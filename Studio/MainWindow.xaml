@@ -139,7 +139,7 @@
             </ScrollViewer>
 
             <!-- main tabs -->
-            <TabControl Grid.Column="1" Margin="4,10,10,10">
+            <TabControl x:Name="tabsMain" Grid.Column="1" Margin="4,10,10,10">
                 <TabItem Header="Evolution">
                     <Grid Margin="6">
                         <Grid.RowDefinitions>
@@ -206,7 +206,7 @@
                                 </StackPanel>
                             </GroupBox>
 
-                            <TabControl Grid.Row="1" Margin="0,4,0,0">
+                            <TabControl x:Name="tabsExaminer" Grid.Row="1" Margin="0,4,0,0">
                                 <TabItem Header="Tree">
                                     <Grid>
                                         <Grid.RowDefinitions>

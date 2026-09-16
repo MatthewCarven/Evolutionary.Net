@@ -69,7 +69,12 @@ namespace EvolutionaryStudio
                     Console.WriteLine($"clone snapshot f(0.25)={cloneValue}");
                 }
 
-                if (final.Tree == null || nodes < 1 || float.IsNaN(atHalf) || !cloneOk)
+                // bundled bike-sharing CSV must load: numeric columns kept, the date column dropped
+                var bike = ProblemPresets.All.Single(p => p.DisplayName.StartsWith("Bike")).Factory();
+                bool bikeOk = bike.Rows.Count > 700 && bike.Columns.Contains("cnt") && !bike.Columns.Contains("dteday");
+                Console.WriteLine($"bike csv: {bike.Rows.Count} rows, {bike.Columns.Count} numeric columns, ok={bikeOk}");
+
+                if (final.Tree == null || nodes < 1 || float.IsNaN(atHalf) || !cloneOk || !bikeOk)
                 {
                     Console.WriteLine("SMOKE FAIL");
                     return 1;

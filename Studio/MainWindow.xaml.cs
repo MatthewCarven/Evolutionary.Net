@@ -124,7 +124,9 @@ namespace EvolutionaryStudio
 
         // ----- run control -------------------------------------------------------
 
-        private async void BtnRun_Click(object sender, RoutedEventArgs e)
+        private async void BtnRun_Click(object sender, RoutedEventArgs e) => await RunEvolutionAsync();
+
+        private async Task RunEvolutionAsync()
         {
             var config = BuildConfig(out string error);
             if (config == null)
@@ -426,6 +428,57 @@ namespace EvolutionaryStudio
         {
             if (treeDiagram != null)
                 treeDiagram.LayoutTransform = new ScaleTransform(e.NewValue, e.NewValue);
+        }
+
+        // ----- screenshot demo mode (used by "--screenshot <dir>") ---------------
+
+        internal async Task<bool> RunScreenshotDemoAsync(string outputDir)
+        {
+            try
+            {
+                System.IO.Directory.CreateDirectory(outputDir);
+
+                // small, quick demo run on the trig-blend preset
+                cboPreset.SelectedIndex = 1;
+                txtPopulation.Text = "250";
+                txtMinGen.Text = "15";
+                txtMaxGen.Text = "35";
+                txtStagnant.Text = "10";
+                await RunEvolutionAsync();
+
+                tabsMain.SelectedIndex = 0;
+                await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                CapturePng(System.IO.Path.Combine(outputDir, "studio_evolution.png"));
+
+                tabsMain.SelectedIndex = 1;
+                tabsExaminer.SelectedIndex = 0;
+                await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                CapturePng(System.IO.Path.Combine(outputDir, "studio_examiner_tree.png"));
+
+                tabsExaminer.SelectedIndex = 1;
+                await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                CapturePng(System.IO.Path.Combine(outputDir, "studio_examiner_fit.png"));
+
+                Console.WriteLine("screenshots written to " + outputDir);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("SCREENSHOT FAIL: " + ex);
+                return false;
+            }
+        }
+
+        private void CapturePng(string path)
+        {
+            var root = (FrameworkElement)Content;
+            var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                (int)root.ActualWidth, (int)root.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(root);
+            var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+            using var stream = System.IO.File.Create(path);
+            encoder.Save(stream);
         }
 
         // ----- parsing helpers ---------------------------------------------------
