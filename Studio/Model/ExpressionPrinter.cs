@@ -76,7 +76,9 @@ namespace EvolutionaryStudio.Model
             var counts = new Dictionary<string, int>();
             void Visit(TreeNodeInfo n)
             {
-                string key = n.Kind == TreeNodeKind.Function ? n.Label : n.Kind.ToString();
+                string key = n.Kind is TreeNodeKind.Function or TreeNodeKind.TerminalFunction
+                    ? n.Label
+                    : n.Kind.ToString();
                 counts[key] = counts.TryGetValue(key, out int c) ? c + 1 : 1;
                 foreach (var child in n.Children) Visit(child);
             }

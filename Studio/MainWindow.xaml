@@ -34,6 +34,36 @@
             <ScrollViewer x:Name="panelConfig" Grid.Column="0" VerticalScrollBarVisibility="Auto" Padding="10,10,4,10">
                 <StackPanel>
                     <GroupBox>
+                        <GroupBox.Header><TextBlock Text="Mode" Style="{StaticResource SectionHeader}"/></GroupBox.Header>
+                        <ComboBox x:Name="cboMode" Margin="0,2" SelectionChanged="CboMode_SelectionChanged">
+                            <ComboBoxItem Content="Symbolic regression — fit a formula to data" IsSelected="True"/>
+                            <ComboBoxItem Content="Blackjack strategy — evolve how to play"/>
+                        </ComboBox>
+                    </GroupBox>
+
+                    <GroupBox x:Name="grpBlackjack" Visibility="Collapsed">
+                        <GroupBox.Header><TextBlock Text="Blackjack settings" Style="{StaticResource SectionHeader}"/></GroupBox.Header>
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="90"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition/><RowDefinition/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Text="Hands per fitness eval" Style="{StaticResource ParamLabel}"/>
+                                <TextBox x:Name="txtBjHands" Grid.Row="0" Grid.Column="1" Style="{StaticResource ParamBox}" Text="25000"/>
+                                <TextBlock Grid.Row="1" Text="Number of decks" Style="{StaticResource ParamLabel}"/>
+                                <TextBox x:Name="txtBjDecks" Grid.Row="1" Grid.Column="1" Style="{StaticResource ParamBox}" Text="4"/>
+                            </Grid>
+                            <CheckBox x:Name="chkBjStack" Content="Stack the deck (more pairs/soft hands)" Margin="0,6,0,0"/>
+                            <TextBlock Foreground="DimGray" TextWrapping="Wrap" FontSize="11" Margin="0,6,0,0"
+                                       Text="Each candidate's tree votes Hit / Stand / Double / Split for every situation; fitness is chips won playing that strategy (2-chip bets). Scores are negative — the house has an edge — so evolution climbs toward the least-losing strategy. More hands = steadier scores but slower generations."/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <GroupBox x:Name="grpProblem">
                         <GroupBox.Header><TextBlock Text="Problem" Style="{StaticResource SectionHeader}"/></GroupBox.Header>
                         <StackPanel>
                             <ComboBox x:Name="cboPreset" Margin="0,2" SelectionChanged="CboPreset_SelectionChanged"/>
@@ -63,7 +93,7 @@
                         </StackPanel>
                     </GroupBox>
 
-                    <GroupBox>
+                    <GroupBox x:Name="grpFunctions">
                         <GroupBox.Header><TextBlock Text="Functions (primitive set)" Style="{StaticResource SectionHeader}"/></GroupBox.Header>
                         <ItemsControl x:Name="icFunctions">
                             <ItemsControl.ItemTemplate>
@@ -75,7 +105,7 @@
                         </ItemsControl>
                     </GroupBox>
 
-                    <GroupBox>
+                    <GroupBox x:Name="grpConstants">
                         <GroupBox.Header><TextBlock Text="Constants" Style="{StaticResource SectionHeader}"/></GroupBox.Header>
                         <StackPanel>
                             <TextBox x:Name="txtConstants" Style="{StaticResource ParamBox}" Text="0, 1, 2, 3, 5, 10, -1, 0.5"/>
@@ -207,7 +237,20 @@
                             </GroupBox>
 
                             <TabControl x:Name="tabsExaminer" Grid.Row="1" Margin="0,4,0,0">
-                                <TabItem Header="Tree">
+                                <TabItem x:Name="tabStrategy" Header="Strategy" Visibility="Collapsed">
+                                    <Grid Background="White">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                                            <controls:StrategyGrid x:Name="strategyGrid" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="6"/>
+                                        </ScrollViewer>
+                                        <TextBlock x:Name="txtStrategyInfo" Grid.Row="1" Margin="12,4,12,10"
+                                                   FontFamily="Consolas" FontSize="13" TextWrapping="Wrap"/>
+                                    </Grid>
+                                </TabItem>
+                                <TabItem x:Name="tabTree" Header="Tree">
                                     <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>
@@ -227,7 +270,7 @@
                                         </ScrollViewer>
                                     </Grid>
                                 </TabItem>
-                                <TabItem Header="Fit quality">
+                                <TabItem x:Name="tabFit" Header="Fit quality">
                                     <Grid Background="White">
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="*"/>
@@ -237,7 +280,7 @@
                                         <TextBlock x:Name="txtFitMetrics" Grid.Row="1" Margin="12,4,12,10" FontFamily="Consolas" FontSize="13"/>
                                     </Grid>
                                 </TabItem>
-                                <TabItem Header="Playground">
+                                <TabItem x:Name="tabPlayground" Header="Playground">
                                     <StackPanel Margin="12" Background="White">
                                         <TextBlock Text="Set variable values, then evaluate the selected solution:" Margin="0,4,0,8"/>
                                         <DataGrid x:Name="gridPlayground" AutoGenerateColumns="False" CanUserAddRows="False"

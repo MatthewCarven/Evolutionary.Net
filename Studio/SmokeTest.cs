@@ -69,12 +69,41 @@ namespace EvolutionaryStudio
                     Console.WriteLine($"clone snapshot f(0.25)={cloneValue}");
                 }
 
+                // quick Blackjack evolution: bool trees, vote functions, strategy extraction
+                var bjConfig = new Model.Blackjack.BlackjackConfig
+                {
+                    HandsPerEval = 2000,
+                    EngineParams = new EngineParameters
+                    {
+                        PopulationSize = 50,
+                        MinGenerations = 1,
+                        MaxGenerations = 3,
+                        StagnantGenerationLimit = 3,
+                        ElitismRate = 0,
+                        CrossoverRate = 1.0,
+                        MutationRate = 0,
+                        RandomTreeMinDepth = 4,
+                        RandomTreeMaxDepth = 7,
+                        TourneySize = 3,
+                        SelectionStyle = SelectionStyle.Tourney
+                    }
+                };
+                var bjRunner = new Model.Blackjack.BlackjackRunner();
+                var bjFinal = bjRunner.RunAsync(bjConfig).GetAwaiter().GetResult();
+                var sampleHand = new Model.Blackjack.Hand();
+                sampleHand.AddCard(new Model.Blackjack.Card(Model.Blackjack.Card.Ranks.Ten, Model.Blackjack.Card.Suits.Hearts));
+                sampleHand.AddCard(new Model.Blackjack.Card(Model.Blackjack.Card.Ranks.Six, Model.Blackjack.Card.Suits.Spades));
+                var sampleAction = bjFinal.Strategy.GetActionForHand(
+                    sampleHand, new Model.Blackjack.Card(Model.Blackjack.Card.Ranks.Ace, Model.Blackjack.Card.Suits.Clubs));
+                bool blackjackOk = bjFinal.Strategy != null && bjFinal.Tree != null && TreeStats.CountNodes(bjFinal.Tree) >= 1;
+                Console.WriteLine($"blackjack: fitness {bjFinal.FitnessText}, hard-16-vs-A action {sampleAction}, ok={blackjackOk}");
+
                 // bundled bike-sharing CSV must load: numeric columns kept, the date column dropped
                 var bike = ProblemPresets.All.Single(p => p.DisplayName.StartsWith("Bike")).Factory();
                 bool bikeOk = bike.Rows.Count > 700 && bike.Columns.Contains("cnt") && !bike.Columns.Contains("dteday");
                 Console.WriteLine($"bike csv: {bike.Rows.Count} rows, {bike.Columns.Count} numeric columns, ok={bikeOk}");
 
-                if (final.Tree == null || nodes < 1 || float.IsNaN(atHalf) || !cloneOk || !bikeOk)
+                if (final.Tree == null || nodes < 1 || float.IsNaN(atHalf) || !cloneOk || !bikeOk || !blackjackOk)
                 {
                     Console.WriteLine("SMOKE FAIL");
                     return 1;

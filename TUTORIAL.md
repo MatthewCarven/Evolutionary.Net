@@ -119,7 +119,7 @@ var winner = engine.FindBestSolution();
 Console.WriteLine(winner.ToString());
 ```
 
-For a full non-regression goal, read `Examples\Blackjack Strategy` — its fitness function plays thousands of hands and returns the money won, and it uses *terminal functions* plus state data so trees can ask questions like "is my hand a pair?".
+For a full non-regression goal, read `Examples\Blackjack Strategy` — its fitness function plays thousands of hands and returns the money won, and it uses *terminal functions* plus state data so trees can ask questions like "is my hand a pair?".  You can also watch this goal evolve without writing any code: switch Studio's **Mode** dropdown to *Blackjack strategy* and press Run — the examiner shows the evolved strategy as the classic hit/stand/double/split tables.  Notice the fitness is negative and rising: the goal there isn't "be right", it's "lose the least against the house edge", and the scorecard-not-instructions idea is exactly the same.
 
 Two engine extras added alongside Studio that help here: `candidate.GetTreeInfo()` gives you a walkable snapshot of the evolved tree (it's what powers the tree diagram), and `candidate.Clone()` now produces independently evaluable copies.
 

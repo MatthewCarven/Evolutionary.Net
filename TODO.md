@@ -11,6 +11,8 @@
 - [x] Studio: examiner — tree diagram, infix printer, predicted-vs-actual, playground
 - [x] Smoke test mode (`--smoke`) and passing build
 - [x] TUTORIAL.md with verified kinetic-energy worked example
+- [x] Blackjack mode in Studio (vote trees, strategy tables, validation score)
+- [x] Fork configured: origin = MatthewCarven/Evolutionary.Net, upstream = GregSommerville
 
 ## Later / ideas
 - [ ] Export: save best expression / per-gen stats to file from the GUI
@@ -20,4 +22,5 @@
 - [ ] Population diversity metrics (unique expression count per generation)
 
 ## For meatthread0
-- [ ] `git push` — commits are local only; origin is Greg Sommerville's upstream repo, so push needs a fork (or add your own remote) first.
+- [x] Fork created and initial push done; remotes configured (origin = fork).
+- [ ] If a future `git push` from a Claude session is blocked by permissions, run it by hand.

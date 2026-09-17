@@ -215,9 +215,11 @@ What it does:
 - **Primitive set & parameters** — toggle the function set (protected division, trig, powers, conditionals, …), edit the constant pool, and tune every `EngineParameters` field from the UI.
 - **Live evolution view** — best/average fitness charted per generation while the engine runs on a background thread, with a full generation history table and a Stop button.
 - **Examiner** — every time the best-so-far improves, a snapshot is kept.  For any snapshot you can see the expression as readable infix math, a color-coded expression-tree diagram with zoom, node/depth/usage statistics, a predicted-vs-actual plot with MAE/RMSE/R² on both train and test data, and a playground for evaluating the tree at hand-typed variable values.
+- **Blackjack mode** — the Blackjack Strategy example, playable from the GUI: boolean trees vote Hit/Stand/Double/Split via stateful functions, fitness is chips won over thousands of simulated hands, and the examiner renders the evolved strategy as the classic color-coded hard/soft/pairs tables alongside the tree that produced it.
 
 ![Evolution view](images/studio_evolution.png)
 ![Examiner tree view](images/studio_examiner_tree.png)
+![Blackjack strategy view](images/studio_blackjack.png)
 
 To support the examiner, the engine gained a small public inspection API (`TreeInspection.GetTreeInfo()` returns a `TreeNodeInfo` snapshot of a candidate's tree), and `CandidateSolution.Clone()` now re-points cloned nodes at the clone so cloned candidates evaluate correctly on their own.
 

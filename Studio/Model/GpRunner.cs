@@ -21,16 +21,21 @@ namespace EvolutionaryStudio.Model
     }
 
     /// <summary>A cloned best-of-run candidate, safe to inspect and evaluate while evolution continues.</summary>
-    public sealed class BestSnapshot
+    public abstract class SnapshotBase
     {
         public int Generation;
         public float Fitness;
         public bool IsFinal;
-        public CandidateSolution<float, ProblemState> Candidate;
         public TreeNodeInfo Tree;
         public string RawExpression;
 
-        public string Label => (IsFinal ? "★ Final best" : $"Gen {Generation}") + $"   {Fitness:G6}";
+        public virtual string FitnessText => Fitness.ToString("G6");
+        public string Label => (IsFinal ? "★ Final best" : $"Gen {Generation}") + "   " + FitnessText;
+    }
+
+    public sealed class BestSnapshot : SnapshotBase
+    {
+        public CandidateSolution<float, ProblemState> Candidate;
     }
 
     public sealed class GpRunner

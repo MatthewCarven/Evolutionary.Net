@@ -6,6 +6,7 @@ using System.Windows.Media;
 using Evolutionary;
 using EvolutionaryStudio.Controls;
 using EvolutionaryStudio.Model;
+using EvolutionaryStudio.Model.Blackjack;
 using Microsoft.Win32;
 
 namespace EvolutionaryStudio
@@ -16,15 +17,19 @@ namespace EvolutionaryStudio
         private readonly Dictionary<string, FunctionDef> defsByName;
         private readonly List<ProblemPreset> presets = ProblemPresets.All;
         private readonly ObservableCollection<GenerationStat> history = new();
-        private readonly ObservableCollection<BestSnapshot> snapshots = new();
+        private readonly ObservableCollection<SnapshotBase> snapshots = new();
         private readonly ObservableCollection<ColumnChoice> columnChoices = new();
 
         private Dataset currentDataset;
         private PreparedProblem lastRunProblem;
         private GpRunner runner;
+        private BlackjackRunner bjRunner;
+        private BlackjackConfig lastBjConfig;
         private PlotSeries bestSeries, avgSeries;
         private List<VarRow> playgroundRows;
         private bool suppressPresetEvent;
+
+        private bool IsBlackjackMode => cboMode.SelectedIndex == 1;
 
         public MainWindow()
         {
@@ -46,6 +51,40 @@ namespace EvolutionaryStudio
 
             UpdateTrainLabel();
             cboPreset.SelectedIndex = 0;
+        }
+
+        // ----- mode switching ----------------------------------------------------
+
+        private void CboMode_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (grpBlackjack == null) return;   // still initializing
+
+            bool blackjack = IsBlackjackMode;
+            grpBlackjack.Visibility = blackjack ? Visibility.Visible : Visibility.Collapsed;
+            grpProblem.Visibility = blackjack ? Visibility.Collapsed : Visibility.Visible;
+            grpFunctions.Visibility = blackjack ? Visibility.Collapsed : Visibility.Visible;
+            grpConstants.Visibility = blackjack ? Visibility.Collapsed : Visibility.Visible;
+
+            SetEngineParamDefaults(blackjack);
+            plotFitness.YLabel = blackjack ? "Fitness (chips won)" : "Fitness (error)";
+            txtRunStatus.Text = blackjack
+                ? "Blackjack mode — engine parameters set to the Blackjack defaults. Press Run."
+                : "Regression mode — engine parameters set to the regression defaults.";
+        }
+
+        private void SetEngineParamDefaults(bool blackjack)
+        {
+            txtPopulation.Text = blackjack ? "250" : "500";
+            txtMinGen.Text = blackjack ? "1" : "20";
+            txtMaxGen.Text = "100";
+            txtStagnant.Text = blackjack ? "10" : "15";
+            txtElitism.Text = blackjack ? "0" : "0.10";
+            txtCrossover.Text = blackjack ? "1.0" : "0.95";
+            txtMutation.Text = blackjack ? "0" : "0.05";
+            txtMinDepth.Text = blackjack ? "4" : "3";
+            txtMaxDepth.Text = blackjack ? "7" : "6";
+            cboSelection.SelectedIndex = 0;
+            txtTourney.Text = blackjack ? "3" : "4";
         }
 
         // ----- problem selection -------------------------------------------------
@@ -124,7 +163,34 @@ namespace EvolutionaryStudio
 
         // ----- run control -------------------------------------------------------
 
-        private async void BtnRun_Click(object sender, RoutedEventArgs e) => await RunEvolutionAsync();
+        private async void BtnRun_Click(object sender, RoutedEventArgs e)
+        {
+            if (IsBlackjackMode)
+                await RunBlackjackAsync();
+            else
+                await RunEvolutionAsync();
+        }
+
+        private void ResetRunViews()
+        {
+            history.Clear();
+            snapshots.Clear();
+            txtInfix.Text = "";
+            txtSnapshotStats.Text = "";
+            treeDiagram.Root = null;
+            plotFit.SetSeries();
+            txtFitMetrics.Text = "";
+            strategyGrid.Strategy = null;
+            txtStrategyInfo.Text = "";
+            txtEvalResult.Text = "";
+        }
+
+        private void StartFitnessChart(string bestName)
+        {
+            bestSeries = new PlotSeries { Name = bestName, Color = Color.FromRgb(0x2D, 0x6C, 0xB5), Thickness = 2.2 };
+            avgSeries = new PlotSeries { Name = "Average (gen)", Color = Color.FromRgb(0xD8, 0x8A, 0x2A), AutoScale = false };
+            ApplyFitnessSeries();
+        }
 
         private async Task RunEvolutionAsync()
         {
@@ -135,18 +201,9 @@ namespace EvolutionaryStudio
                 return;
             }
 
-            history.Clear();
-            snapshots.Clear();
-            txtInfix.Text = "";
-            txtSnapshotStats.Text = "";
-            treeDiagram.Root = null;
-            plotFit.SetSeries();
-            txtFitMetrics.Text = "";
+            ResetRunViews();
             lastRunProblem = config.Problem;
-
-            bestSeries = new PlotSeries { Name = "Best so far", Color = Color.FromRgb(0x2D, 0x6C, 0xB5), Thickness = 2.2 };
-            avgSeries = new PlotSeries { Name = "Average (gen)", Color = Color.FromRgb(0xD8, 0x8A, 0x2A), AutoScale = false };
-            ApplyFitnessSeries();
+            StartFitnessChart("Best so far");
 
             runner = new GpRunner();
             runner.GenerationCompleted += stat => Dispatcher.BeginInvoke(() => OnGeneration(stat));
@@ -172,9 +229,48 @@ namespace EvolutionaryStudio
             }
         }
 
+        private async Task RunBlackjackAsync()
+        {
+            var config = BuildBlackjackConfig(out string error);
+            if (config == null)
+            {
+                MessageBox.Show(this, error, "Can't start the run", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            ResetRunViews();
+            lastRunProblem = null;
+            lastBjConfig = config;
+            StartFitnessChart("Best so far (chips)");
+
+            bjRunner = new BlackjackRunner();
+            bjRunner.GenerationCompleted += stat => Dispatcher.BeginInvoke(() => OnGeneration(stat));
+            bjRunner.NewBest += snap => Dispatcher.BeginInvoke(() => AddSnapshot(snap));
+
+            SetRunningUi(true);
+            txtRunStatus.Text = "Evolving a Blackjack strategy…";
+            try
+            {
+                var final = await bjRunner.RunAsync(config);
+                AddSnapshot(final);
+                txtRunStatus.Text = $"Done — best strategy scored {final.FitnessText} over {config.HandsPerEval} hands.  " +
+                                    "Open the Examiner tab to see how it plays.";
+            }
+            catch (Exception ex)
+            {
+                txtRunStatus.Text = "Run failed.";
+                MessageBox.Show(this, ex.ToString(), "Run failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                SetRunningUi(false);
+            }
+        }
+
         private void BtnStop_Click(object sender, RoutedEventArgs e)
         {
             runner?.RequestStop();
+            bjRunner?.RequestStop();
             btnStop.IsEnabled = false;
             txtRunStatus.Text = "Stopping after this generation…";
         }
@@ -211,16 +307,7 @@ namespace EvolutionaryStudio
                 constants.Add(value);
             }
 
-            if (!TryParseInt(txtPopulation.Text, 10, 100000, "Population size", out int population, ref error)) return null;
-            if (!TryParseInt(txtMinGen.Text, 1, 100000, "Min generations", out int minGen, ref error)) return null;
-            if (!TryParseInt(txtMaxGen.Text, minGen, 1000000, "Max generations", out int maxGen, ref error)) return null;
-            if (!TryParseInt(txtStagnant.Text, 1, 100000, "Stagnant generations", out int stagnant, ref error)) return null;
-            if (!TryParseDouble(txtElitism.Text, 0, 0.9, "Elitism rate", out double elitism, ref error)) return null;
-            if (!TryParseDouble(txtCrossover.Text, 0, 1, "Crossover rate", out double crossover, ref error)) return null;
-            if (!TryParseDouble(txtMutation.Text, 0, 1, "Mutation rate", out double mutation, ref error)) return null;
-            if (!TryParseInt(txtMinDepth.Text, 1, 10, "Tree min depth", out int minDepth, ref error)) return null;
-            if (!TryParseInt(txtMaxDepth.Text, minDepth, 10, "Tree max depth", out int maxDepth, ref error)) return null;
-            if (!TryParseInt(txtTourney.Text, 2, population, "Tourney size", out int tourney, ref error)) return null;
+            if (!TryParseEngineParams(out var engineParams, ref error)) return null;
 
             var problem = ProblemBuilder.Prepare(currentDataset, currentDataset.Columns.IndexOf(target),
                                                  inputIndexes, sliderTrain.Value / 100.0);
@@ -231,26 +318,60 @@ namespace EvolutionaryStudio
                 Constants = constants,
                 Problem = problem,
                 UseRmse = cboMetric.SelectedIndex == 1,
-                EngineParams = new EngineParameters
+                EngineParams = engineParams
+            };
+        }
+
+        private BlackjackConfig BuildBlackjackConfig(out string error)
+        {
+            error = null;
+            if (!TryParseInt(txtBjHands.Text, 500, 1000000, "Hands per fitness eval", out int hands, ref error)) return null;
+            if (!TryParseInt(txtBjDecks.Text, 1, 8, "Number of decks", out int decks, ref error)) return null;
+            if (!TryParseEngineParams(out var engineParams, ref error)) return null;
+
+            return new BlackjackConfig
+            {
+                EngineParams = engineParams,
+                HandsPerEval = hands,
+                NumDecks = decks,
+                StackTheDeck = chkBjStack.IsChecked == true
+            };
+        }
+
+        private bool TryParseEngineParams(out EngineParameters engineParams, ref string error)
+        {
+            engineParams = null;
+            if (!TryParseInt(txtPopulation.Text, 10, 100000, "Population size", out int population, ref error)) return false;
+            if (!TryParseInt(txtMinGen.Text, 1, 100000, "Min generations", out int minGen, ref error)) return false;
+            if (!TryParseInt(txtMaxGen.Text, minGen, 1000000, "Max generations", out int maxGen, ref error)) return false;
+            if (!TryParseInt(txtStagnant.Text, 1, 100000, "Stagnant generations", out int stagnant, ref error)) return false;
+            if (!TryParseDouble(txtElitism.Text, 0, 0.9, "Elitism rate", out double elitism, ref error)) return false;
+            if (!TryParseDouble(txtCrossover.Text, 0, 1, "Crossover rate", out double crossover, ref error)) return false;
+            if (!TryParseDouble(txtMutation.Text, 0, 1, "Mutation rate", out double mutation, ref error)) return false;
+            if (!TryParseInt(txtMinDepth.Text, 1, 10, "Tree min depth", out int minDepth, ref error)) return false;
+            if (!TryParseInt(txtMaxDepth.Text, minDepth, 10, "Tree max depth", out int maxDepth, ref error)) return false;
+            if (!TryParseInt(txtTourney.Text, 2, population, "Tourney size", out int tourney, ref error)) return false;
+
+            engineParams = new EngineParameters
+            {
+                PopulationSize = population,
+                MinGenerations = minGen,
+                MaxGenerations = maxGen,
+                StagnantGenerationLimit = stagnant,
+                ElitismRate = elitism,
+                CrossoverRate = crossover,
+                MutationRate = mutation,
+                RandomTreeMinDepth = minDepth,
+                RandomTreeMaxDepth = maxDepth,
+                TourneySize = tourney,
+                SelectionStyle = cboSelection.SelectedIndex switch
                 {
-                    PopulationSize = population,
-                    MinGenerations = minGen,
-                    MaxGenerations = maxGen,
-                    StagnantGenerationLimit = stagnant,
-                    ElitismRate = elitism,
-                    CrossoverRate = crossover,
-                    MutationRate = mutation,
-                    RandomTreeMinDepth = minDepth,
-                    RandomTreeMaxDepth = maxDepth,
-                    TourneySize = tourney,
-                    SelectionStyle = cboSelection.SelectedIndex switch
-                    {
-                        1 => SelectionStyle.RouletteWheel,
-                        2 => SelectionStyle.Ranked,
-                        _ => SelectionStyle.Tourney
-                    }
+                    1 => SelectionStyle.RouletteWheel,
+                    2 => SelectionStyle.Ranked,
+                    _ => SelectionStyle.Tourney
                 }
             };
+            return true;
         }
 
         // ----- live progress -----------------------------------------------------
@@ -278,7 +399,7 @@ namespace EvolutionaryStudio
 
         // ----- examiner ----------------------------------------------------------
 
-        private void AddSnapshot(BestSnapshot snap)
+        private void AddSnapshot(SnapshotBase snap)
         {
             // the final best is usually the same tree as the last improvement — merge them
             if (snap.IsFinal && snapshots.Count > 0 && snapshots[0].RawExpression == snap.RawExpression)
@@ -291,11 +412,11 @@ namespace EvolutionaryStudio
 
         private void LstSnapshots_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
-            if (lstSnapshots.SelectedItem is BestSnapshot snap)
+            if (lstSnapshots.SelectedItem is SnapshotBase snap)
                 ShowSnapshot(snap);
         }
 
-        private void ShowSnapshot(BestSnapshot snap)
+        private void ShowSnapshot(SnapshotBase snap)
         {
             txtInfix.Text = ExpressionPrinter.ToInfix(snap.Tree, defsByName);
 
@@ -306,12 +427,44 @@ namespace EvolutionaryStudio
                                  .Take(6)
                                  .Select(kv => $"{kv.Key}×{kv.Value}");
             string origin = snap.IsFinal ? "final best of run" : $"new best at generation {snap.Generation}";
-            txtSnapshotStats.Text = $"{origin}   ·   fitness {snap.Fitness:G6}   ·   {nodes} nodes, depth {depth}   ·   {string.Join(", ", usage)}";
+            txtSnapshotStats.Text = $"{origin}   ·   fitness {snap.FitnessText}   ·   {nodes} nodes, depth {depth}   ·   {string.Join(", ", usage)}";
 
             treeDiagram.Root = snap.Tree;
-            UpdateFitPlot(snap);
-            UpdatePlayground();
             txtEvalResult.Text = "";
+
+            bool blackjack = snap is BlackjackSnapshot;
+            tabStrategy.Visibility = blackjack ? Visibility.Visible : Visibility.Collapsed;
+            tabFit.Visibility = blackjack ? Visibility.Collapsed : Visibility.Visible;
+            tabPlayground.Visibility = blackjack ? Visibility.Collapsed : Visibility.Visible;
+            if (tabsExaminer.SelectedItem is System.Windows.Controls.TabItem current && current.Visibility != Visibility.Visible)
+                tabsExaminer.SelectedItem = blackjack ? tabStrategy : tabTree;
+
+            if (snap is BestSnapshot regression)
+            {
+                UpdateFitPlot(regression);
+                UpdatePlayground();
+            }
+            else if (snap is BlackjackSnapshot bj)
+            {
+                ShowBlackjackSnapshot(bj);
+            }
+        }
+
+        private void ShowBlackjackSnapshot(BlackjackSnapshot snap)
+        {
+            strategyGrid.Strategy = snap.Strategy;
+            if (lastBjConfig == null)
+            {
+                txtStrategyInfo.Text = $"Training score: {snap.FitnessText}";
+                return;
+            }
+
+            // replay the strategy on freshly shuffled decks to show an honest out-of-training score
+            int validation = new StrategyTester(snap.Strategy, lastBjConfig).PlayHands(lastBjConfig.HandsPerEval);
+            double wagered = (double)lastBjConfig.HandsPerEval * lastBjConfig.BetSize;
+            txtStrategyInfo.Text =
+                $"Training score: {snap.FitnessText} over {lastBjConfig.HandsPerEval} hands    ·    " +
+                $"fresh-deal validation: {validation:+0;-0;0} chips  (≈{100.0 * validation / wagered:F2}% of chips wagered)";
         }
 
         private void UpdateFitPlot(BestSnapshot snap)
@@ -421,7 +574,7 @@ namespace EvolutionaryStudio
 
         private void BtnCopyRaw_Click(object sender, RoutedEventArgs e)
         {
-            if (lstSnapshots.SelectedItem is BestSnapshot snap) Clipboard.SetText(snap.RawExpression);
+            if (lstSnapshots.SelectedItem is SnapshotBase snap) Clipboard.SetText(snap.RawExpression);
         }
 
         private void SliderZoom_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -458,6 +611,19 @@ namespace EvolutionaryStudio
                 tabsExaminer.SelectedIndex = 1;
                 await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ApplicationIdle);
                 CapturePng(System.IO.Path.Combine(outputDir, "studio_examiner_fit.png"));
+
+                // a quick Blackjack run for the strategy view
+                cboMode.SelectedIndex = 1;
+                txtPopulation.Text = "120";
+                txtMaxGen.Text = "8";
+                txtStagnant.Text = "8";
+                txtBjHands.Text = "5000";
+                await RunBlackjackAsync();
+
+                tabsMain.SelectedIndex = 1;
+                tabsExaminer.SelectedItem = tabStrategy;
+                await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                CapturePng(System.IO.Path.Combine(outputDir, "studio_blackjack.png"));
 
                 Console.WriteLine("screenshots written to " + outputDir);
                 return true;
