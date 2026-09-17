@@ -207,6 +207,8 @@ The `Studio` folder contains **Evolutionary Studio**, a WPF desktop app that wra
 dotnet run --project Studio -c Release
 ```
 
+New to it?  **[TUTORIAL.md](TUTORIAL.md)** walks from first run to implementing your own goal (with a worked kinetic-energy example in `Examples\kinetic-energy.csv`).
+
 What it does:
 
 - **Problem setup** — built-in target-function presets, or load any CSV (numeric columns are detected automatically, and the bike-sharing dataset ships as a preset).  Pick the target column, the input columns, the train/test split, and MAE or RMSE as the fitness metric.

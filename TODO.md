@@ -10,6 +10,7 @@
 - [x] Studio: live fitness chart + generation history grid
 - [x] Studio: examiner — tree diagram, infix printer, predicted-vs-actual, playground
 - [x] Smoke test mode (`--smoke`) and passing build
+- [x] TUTORIAL.md with verified kinetic-energy worked example
 
 ## Later / ideas
 - [ ] Export: save best expression / per-gen stats to file from the GUI

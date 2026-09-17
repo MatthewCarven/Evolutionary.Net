@@ -11,3 +11,11 @@
   - Examples still reference the legacy csproj and are unaffected.
 - Built `Studio\` (Evolutionary Studio): problem presets + CSV loader (bundled bike-sharing data), primitive set / engine parameter panels, background run with live fitness chart + generation history, Examiner tab (tree diagram, infix expression, predicted-vs-actual + MAE/RMSE/R², variable playground). Custom chart + tree-layout controls, no external packages (matching the repo's zero-dependency spirit).
 - `EvolutionaryStudio.exe --smoke` runs a tiny headless evolution (Koza polynomial) and exits 0/1 — used as the build-verification harness.
+
+## 2026-09-17
+
+- User asked for a tutorial on "implementing a goal". Wrote `TUTORIAL.md`: goal = scorecard concept, preset warm-up, worked kinetic-energy example (`Examples\kinetic-energy.csv`, 100 rows, KE = ½·m·v²), tuning cheat-sheet, code-path fitness-function example, troubleshooting.
+- Verified the worked example headlessly (scratchpad console harness referencing EvolutionaryStudio.dll) before documenting it:
+  - Default primitive set (with Sin/Cos): MAE 6.09 after 100 gens, bloated formula — kept in the tutorial as the "choose primitives to fit the goal" lesson.
+  - Add/Sub/Mult/Div/Square only: exact solve (MAE 0) at generation 5 — `(m/2 + zero-junk) * Square(v)`.
+- Linked the tutorial from the Readme's Studio section.
