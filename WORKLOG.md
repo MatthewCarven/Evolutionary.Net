@@ -23,3 +23,20 @@
 - **Blackjack mode in Studio** (user request). Ported the Blackjack Strategy example's single-tree approach (`SolutionSingle`) into `Studio\Model\Blackjack\`: Card/Hand/Deck, Strategy table, StrategyTester simulation, and BlackjackRunner (bool trees, HitIf/StandIf/DoubleIf/SplitIf vote functions, 44 terminal functions generated in loops with the original names). New `StrategyGrid` control renders the classic hard/soft/pairs tables. MainWindow gained a Mode dropdown that swaps config panels, sets per-mode engine defaults, and shows a Strategy examiner tab with a fresh-deal validation score. Snapshots refactored to a shared `SnapshotBase`.
 - Port note: the original example's player-Blackjack payoff branches are inverted (winning blackjack only returned the bet; a push paid the bonus). The port implements correct 3:2 rules. The per-upcard variant (`SolutionByUpcard`, 10 sequential runs) was not ported.
 - Verified: smoke test extended (blackjack mini-run + strategy query), screenshot demo captures the strategy view (`images/studio_blackjack.png`) — 8-gen demo run scored −980 chips/5000 hands with sane emergent patterns (double on 11, hit 10).
+
+### Blackjack evolution experiments (user request: "let it evolve 60+ generations, tune as you like")
+
+Ran three 101-generation experiments via a scratchpad harness referencing the Studio dll, each validated on 10 × 100,000 *fresh-deal* hands, benchmarked against the example's hand-coded basic strategy (ported; its rendered table matches published basic strategy). Scores are % of chips wagered:
+
+| Experiment | Setup | Train (best-so-far) | Fresh-deal validation |
+|---|---|---|---|
+| A defaults | pop 250, 25k hands/eval, no mutation/elitism | −2.76% | **−5.37% ± 0.10** |
+| B tuned | pop 500, 40k hands/eval, mutation 0.10, elitism 0.04 | −0.43% | **−2.36% ± 0.15** |
+| C stacked deck | as A, StackTheDeck=true | +20.18% (!) | **−7.33% ± 0.12** |
+| Basic strategy | hand-coded benchmark | — | **+0.02% ± 0.09** |
+
+Findings (images: `images/blackjack_lab_curves.png`, `images/blackjack_lab_best.png`):
+- Train ≫ validation across the board: with noisy fitness (25k-hand evals have a std of roughly ±1.2% of wagered), "best-so-far" is partly deal-luck. Bigger eval samples (B) shrink the gap and produce genuinely better play.
+- Stacking the deck is a trap: C posted +20% on its stacked distribution but transferred worst of all. Train on the distribution you'll be tested on.
+- Champion B learned real blackjack: always double 10/11, stand 15+, stand soft A-7+, hit stiffs vs strong upcards — but never learned "stand on 12–16 vs weak dealer" or "always split A-A/8-8" (it splits everything vs dealer 4, a comic local optimum). A single tree struggles to condition on the dealer upcard — quantifies why the example's per-upcard variant (not ported) exists.
+- This simulator's rules (3:2, dealer stands soft 17, peek, DAS, post-split 21 pays 3:2) make basic strategy ≈ break-even, so evolved-vs-basic gaps read directly as % of wagered.
