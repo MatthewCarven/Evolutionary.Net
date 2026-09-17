@@ -217,6 +217,8 @@ What it does:
 - **Examiner** — every time the best-so-far improves, a snapshot is kept.  For any snapshot you can see the expression as readable infix math, a color-coded expression-tree diagram with zoom, node/depth/usage statistics, a predicted-vs-actual plot with MAE/RMSE/R² on both train and test data, and a playground for evaluating the tree at hand-typed variable values.
 - **Blackjack mode** — the Blackjack Strategy example, playable from the GUI: boolean trees vote Hit/Stand/Double/Split via stateful functions, fitness is chips won over thousands of simulated hands, and the examiner renders the evolved strategy as the classic color-coded hard/soft/pairs tables alongside the tree that produced it.
 
+<img width="1346" height="853" alt="image" src="https://github.com/user-attachments/assets/fce8f6b7-0bbd-4245-92c7-d9d6c8bec96d" />
+
 ![Evolution view](images/studio_evolution.png)
 ![Examiner tree view](images/studio_examiner_tree.png)
 ![Blackjack strategy view](images/studio_blackjack.png)
