@@ -1,5 +1,24 @@
 # Worklog — Evolutionary.Net GUI & Examiner
 
+## 2026-09-20 (later) — Snake mode
+
+- User asked for Snake as an evolvable choice in the Studio (companion to the
+  GA driver we built in his Python Snake repo the same day).
+- `Studio\Model\Snake\`: C# port of his Python `SnakeGame` (same rules incl.
+  tail-vacating exception; O(1) body set) + `SnakeRunner` — bool vote-trees
+  steering in the snake's frame (GoStraightIf/TurnLeftIf/TurnRightIf votes;
+  DangerAhead/Left/Right, Danger2Ahead, Food{Ahead,Behind,Left,Right},
+  LongBody terminals; And/Or/Not logic). Fitness = apples×1000 + steps with a
+  board-area hunger rule; per-generation shared seeds rolled in the progress
+  callback. Snapshots reuse SnapshotBase.
+- UI: third mode in the dropdown, snake settings group, per-mode engine
+  defaults, and a Watch tab in the Examiner — `SnakeBoard` control animated by
+  a DispatcherTimer with pause / new game / speed controls.
+- Verified: build clean, smoke test extended (snake mini-run + headless
+  replay), screenshot demo captures the Watch tab (`images/studio_snake.png`).
+  Demo run hit 26 apples (26,280 pts) after just 12 generations — the GP
+  vote-tree is remarkably competitive with the Python neural-net driver.
+
 ## 2026-09-20
 
 - "Bells and whistles" pass to make the fork useful to others:

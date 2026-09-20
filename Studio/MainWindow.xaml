@@ -44,6 +44,7 @@
                         <ComboBox x:Name="cboMode" Margin="0,2" SelectionChanged="CboMode_SelectionChanged">
                             <ComboBoxItem Content="Symbolic regression — fit a formula to data" IsSelected="True"/>
                             <ComboBoxItem Content="Blackjack strategy — evolve how to play"/>
+                            <ComboBoxItem Content="Snake — evolve a self-driving snake"/>
                         </ComboBox>
                     </GroupBox>
 
@@ -66,6 +67,27 @@
                             <CheckBox x:Name="chkBjStack" Content="Stack the deck (more pairs/soft hands)" Margin="0,6,0,0"/>
                             <TextBlock Foreground="DimGray" TextWrapping="Wrap" FontSize="11" Margin="0,6,0,0"
                                        Text="Each candidate's tree votes Hit / Stand / Double / Split for every situation; fitness is chips won playing that strategy (2-chip bets). Scores are negative — the house has an edge — so evolution climbs toward the least-losing strategy. More hands = steadier scores but slower generations."/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <GroupBox x:Name="grpSnake" Visibility="Collapsed">
+                        <GroupBox.Header><TextBlock Text="Snake settings" Style="{StaticResource SectionHeader}"/></GroupBox.Header>
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="90"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition/><RowDefinition/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Text="Board size (N×N)" Style="{StaticResource ParamLabel}"/>
+                                <TextBox x:Name="txtSnakeBoard" Grid.Row="0" Grid.Column="1" Style="{StaticResource ParamBox}" Text="12"/>
+                                <TextBlock Grid.Row="1" Text="Games per fitness eval" Style="{StaticResource ParamLabel}"/>
+                                <TextBox x:Name="txtSnakeGames" Grid.Row="1" Grid.Column="1" Style="{StaticResource ParamBox}" Text="4"/>
+                            </Grid>
+                            <TextBlock Foreground="DimGray" TextWrapping="Wrap" FontSize="11" Margin="0,6,0,0"
+                                       Text="Each candidate is a decision tree steering in the snake's own frame: senses like DangerAhead() and FoodLeft() feed votes for straight / turn left / turn right. Fitness = apples ×1000 + steps, with a hunger rule so circling forever scores nothing. Watch the champion play in the Examiner."/>
                         </StackPanel>
                     </GroupBox>
 
@@ -268,6 +290,26 @@
                                             <TextBlock x:Name="txtStrategyInfo" Margin="0,0,12,0"
                                                        FontFamily="Consolas" FontSize="13" TextWrapping="Wrap"/>
                                         </DockPanel>
+                                    </Grid>
+                                </TabItem>
+                                <TabItem x:Name="tabWatch" Header="Watch" Visibility="Collapsed">
+                                    <Grid Background="White">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+                                        <StackPanel Orientation="Horizontal" Margin="8,8,8,4">
+                                            <Button x:Name="btnReplayPause" Content="Pause" Padding="10,2" Click="BtnReplayPause_Click"/>
+                                            <Button x:Name="btnReplayNew" Content="New game" Padding="10,2" Margin="8,0,0,0" Click="BtnReplayNew_Click"/>
+                                            <TextBlock Text="Speed:" VerticalAlignment="Center" Margin="16,0,6,0"/>
+                                            <Slider x:Name="sliderReplaySpeed" Minimum="4" Maximum="30" Value="12" Width="120"
+                                                    VerticalAlignment="Center" ValueChanged="SliderReplaySpeed_ValueChanged"/>
+                                            <TextBlock x:Name="txtReplayInfo" VerticalAlignment="Center" Margin="16,0,0,0"
+                                                       FontFamily="Consolas"/>
+                                        </StackPanel>
+                                        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                                            <controls:SnakeBoard x:Name="snakeBoard" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="8"/>
+                                        </ScrollViewer>
                                     </Grid>
                                 </TabItem>
                                 <TabItem x:Name="tabTree" Header="Tree">

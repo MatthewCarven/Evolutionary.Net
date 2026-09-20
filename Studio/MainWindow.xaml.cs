@@ -8,6 +8,7 @@ using Evolutionary;
 using EvolutionaryStudio.Controls;
 using EvolutionaryStudio.Model;
 using EvolutionaryStudio.Model.Blackjack;
+using EvolutionaryStudio.Model.Snake;
 using Microsoft.Win32;
 
 namespace EvolutionaryStudio
@@ -26,12 +27,22 @@ namespace EvolutionaryStudio
         private GpRunner runner;
         private BlackjackRunner bjRunner;
         private BlackjackConfig lastBjConfig;
+        private SnakeRunner snakeRunner;
+        private SnakeConfig lastSnakeConfig;
         private PlotSeries bestSeries, avgSeries;
         private List<VarRow> playgroundRows;
         private bool suppressPresetEvent;
         private string loadedCsvPath;
 
+        // snake replay (Watch tab)
+        private System.Windows.Threading.DispatcherTimer replayTimer;
+        private CandidateSolution<bool, SnakeState> replayCandidate;
+        private Model.Snake.SnakeGame replayGame;
+        private readonly Random replayRng = new();
+        private int replaySteps, replayHunger, replayGames, replayBest, replayDeadTicks;
+
         private bool IsBlackjackMode => cboMode.SelectedIndex == 1;
+        private bool IsSnakeMode => cboMode.SelectedIndex == 2;
 
         public MainWindow()
         {
@@ -59,39 +70,48 @@ namespace EvolutionaryStudio
 
         private void CboMode_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
-            if (grpBlackjack == null) return;   // still initializing
+            if (grpBlackjack == null || grpSnake == null) return;   // still initializing
 
-            bool blackjack = IsBlackjackMode;
+            int mode = cboMode.SelectedIndex;
+            bool regression = mode == 0, blackjack = mode == 1, snake = mode == 2;
+            grpProblem.Visibility = regression ? Visibility.Visible : Visibility.Collapsed;
+            grpFunctions.Visibility = regression ? Visibility.Visible : Visibility.Collapsed;
+            grpConstants.Visibility = regression ? Visibility.Visible : Visibility.Collapsed;
             grpBlackjack.Visibility = blackjack ? Visibility.Visible : Visibility.Collapsed;
-            grpProblem.Visibility = blackjack ? Visibility.Collapsed : Visibility.Visible;
-            grpFunctions.Visibility = blackjack ? Visibility.Collapsed : Visibility.Visible;
-            grpConstants.Visibility = blackjack ? Visibility.Collapsed : Visibility.Visible;
+            grpSnake.Visibility = snake ? Visibility.Visible : Visibility.Collapsed;
 
-            SetEngineParamDefaults(blackjack);
-            plotFitness.YLabel = blackjack ? "Fitness (chips won)" : "Fitness (error)";
+            SetEngineParamDefaults(mode);
+            plotFitness.YLabel = blackjack ? "Fitness (chips won)"
+                               : snake ? "Fitness (points)"
+                               : "Fitness (error)";
 
-            // chip scores are negative, so a log axis only makes sense for regression error
+            // chip scores are negative, so a log axis only makes sense elsewhere;
+            // regression error and snake points are non-negative
             if (blackjack) chkLogScale.IsChecked = false;
             chkLogScale.IsEnabled = !blackjack;
             plotFitness.LogY = chkLogScale.IsChecked == true;
-            txtRunStatus.Text = blackjack
-                ? "Blackjack mode — engine parameters set to the Blackjack defaults. Press Run."
-                : "Regression mode — engine parameters set to the regression defaults.";
+
+            txtRunStatus.Text = regression
+                ? "Regression mode — engine parameters set to the regression defaults."
+                : blackjack
+                    ? "Blackjack mode — engine parameters set to the Blackjack defaults. Press Run."
+                    : "Snake mode — evolve a self-driving snake, then watch it play in the Examiner. Press Run.";
         }
 
-        private void SetEngineParamDefaults(bool blackjack)
+        private void SetEngineParamDefaults(int mode)
         {
-            txtPopulation.Text = blackjack ? "250" : "500";
-            txtMinGen.Text = blackjack ? "1" : "20";
+            // modes: 0 = regression, 1 = blackjack, 2 = snake
+            txtPopulation.Text = mode switch { 1 => "250", 2 => "250", _ => "500" };
+            txtMinGen.Text = mode switch { 0 => "20", _ => "1" };
             txtMaxGen.Text = "100";
-            txtStagnant.Text = blackjack ? "10" : "15";
-            txtElitism.Text = blackjack ? "0" : "0.10";
-            txtCrossover.Text = blackjack ? "1.0" : "0.95";
-            txtMutation.Text = blackjack ? "0" : "0.05";
-            txtMinDepth.Text = blackjack ? "4" : "3";
-            txtMaxDepth.Text = blackjack ? "7" : "6";
+            txtStagnant.Text = mode switch { 1 => "10", _ => "15" };
+            txtElitism.Text = mode switch { 0 => "0.10", 1 => "0", _ => "0.05" };
+            txtCrossover.Text = mode switch { 1 => "1.0", _ => "0.95" };
+            txtMutation.Text = mode switch { 1 => "0", _ => "0.05" };
+            txtMinDepth.Text = mode switch { 0 => "3", _ => "4" };
+            txtMaxDepth.Text = mode switch { 0 => "6", _ => "7" };
             cboSelection.SelectedIndex = 0;
-            txtTourney.Text = blackjack ? "3" : "4";
+            txtTourney.Text = mode switch { 1 => "3", _ => "4" };
         }
 
         // ----- problem selection -------------------------------------------------
@@ -174,7 +194,9 @@ namespace EvolutionaryStudio
 
         private async void BtnRun_Click(object sender, RoutedEventArgs e)
         {
-            if (IsBlackjackMode)
+            if (IsSnakeMode)
+                await RunSnakeAsync();
+            else if (IsBlackjackMode)
                 await RunBlackjackAsync();
             else
                 await RunEvolutionAsync();
@@ -192,6 +214,7 @@ namespace EvolutionaryStudio
             strategyGrid.Strategy = null;
             txtStrategyInfo.Text = "";
             txtEvalResult.Text = "";
+            StopReplay();
         }
 
         private void StartFitnessChart(string bestName)
@@ -276,10 +299,59 @@ namespace EvolutionaryStudio
             }
         }
 
+        private async Task RunSnakeAsync()
+        {
+            var config = BuildSnakeConfig(out string error);
+            if (config == null)
+            {
+                MessageBox.Show(this, error, "Can't start the run", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            ResetRunViews();
+            lastRunProblem = null;
+            lastSnakeConfig = config;
+            StartFitnessChart("Best so far (points)");
+
+            snakeRunner = new SnakeRunner();
+            snakeRunner.GenerationCompleted += stat => Dispatcher.BeginInvoke(() => OnGeneration(stat));
+            snakeRunner.NewBest += snap => Dispatcher.BeginInvoke(() => AddSnapshot(snap));
+
+            SetRunningUi(true);
+            txtRunStatus.Text = "Evolving a snake player…";
+            try
+            {
+                var final = await snakeRunner.RunAsync(config);
+                AddSnapshot(final);
+                txtRunStatus.Text = $"Done — best snake scored {final.FitnessText}.  " +
+                                    "Open the Examiner's Watch tab to see it play.";
+            }
+            catch (Exception ex)
+            {
+                txtRunStatus.Text = "Run failed.";
+                MessageBox.Show(this, ex.ToString(), "Run failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                SetRunningUi(false);
+            }
+        }
+
+        private SnakeConfig BuildSnakeConfig(out string error)
+        {
+            error = null;
+            if (!TryParseInt(txtSnakeBoard.Text, 6, 30, "Board size", out int board, ref error)) return null;
+            if (!TryParseInt(txtSnakeGames.Text, 1, 20, "Games per fitness eval", out int games, ref error)) return null;
+            if (!TryParseEngineParams(out var engineParams, ref error)) return null;
+
+            return new SnakeConfig { EngineParams = engineParams, Board = board, GamesPerEval = games };
+        }
+
         private void BtnStop_Click(object sender, RoutedEventArgs e)
         {
             runner?.RequestStop();
             bjRunner?.RequestStop();
+            snakeRunner?.RequestStop();
             btnStop.IsEnabled = false;
             txtRunStatus.Text = "Stopping after this generation…";
         }
@@ -442,21 +514,127 @@ namespace EvolutionaryStudio
             txtEvalResult.Text = "";
 
             bool blackjack = snap is BlackjackSnapshot;
+            bool snake = snap is SnakeSnapshot;
+            bool regressionMode = !blackjack && !snake;
             tabStrategy.Visibility = blackjack ? Visibility.Visible : Visibility.Collapsed;
-            tabFit.Visibility = blackjack ? Visibility.Collapsed : Visibility.Visible;
-            tabPlayground.Visibility = blackjack ? Visibility.Collapsed : Visibility.Visible;
+            tabWatch.Visibility = snake ? Visibility.Visible : Visibility.Collapsed;
+            tabFit.Visibility = regressionMode ? Visibility.Visible : Visibility.Collapsed;
+            tabPlayground.Visibility = regressionMode ? Visibility.Visible : Visibility.Collapsed;
             if (tabsExaminer.SelectedItem is System.Windows.Controls.TabItem current && current.Visibility != Visibility.Visible)
-                tabsExaminer.SelectedItem = blackjack ? tabStrategy : tabTree;
+                tabsExaminer.SelectedItem = blackjack ? tabStrategy : snake ? tabWatch : tabTree;
 
             if (snap is BestSnapshot regression)
             {
+                StopReplay();
                 UpdateFitPlot(regression);
                 UpdatePlayground();
             }
             else if (snap is BlackjackSnapshot bj)
             {
+                StopReplay();
                 ShowBlackjackSnapshot(bj);
             }
+            else if (snap is SnakeSnapshot snakeSnap)
+            {
+                StartReplay(snakeSnap);
+            }
+        }
+
+        // ----- snake replay (Watch tab) ------------------------------------------
+
+        private void StartReplay(SnakeSnapshot snap)
+        {
+            replayCandidate = snap.Candidate;
+            replayGames = 0;
+            replayBest = 0;
+            NewReplayGame(snap.Board);
+
+            if (replayTimer == null)
+            {
+                replayTimer = new System.Windows.Threading.DispatcherTimer();
+                replayTimer.Tick += (_, _) => ReplayTick();
+            }
+            replayTimer.Interval = TimeSpan.FromMilliseconds(1000.0 / sliderReplaySpeed.Value);
+            replayTimer.Start();
+            btnReplayPause.Content = "Pause";
+        }
+
+        private void StopReplay()
+        {
+            replayTimer?.Stop();
+            replayCandidate = null;
+            replayGame = null;
+            if (snakeBoard != null) snakeBoard.Game = null;
+            if (txtReplayInfo != null) txtReplayInfo.Text = "";
+        }
+
+        private void NewReplayGame(int board)
+        {
+            replayGame = new Model.Snake.SnakeGame(board, board, replayRng.Next(1_000_000_000));
+            replaySteps = replayHunger = replayDeadTicks = 0;
+            snakeBoard.Game = replayGame;
+        }
+
+        private void ReplayTick()
+        {
+            if (replayCandidate == null || replayGame == null)
+                return;
+
+            int board = replayGame.Width;
+            if (replayGame.Alive && !replayGame.Won && replayHunger < board * board)
+            {
+                replayGame.SetDirection(SnakeRunner.Decide(replayCandidate, replayGame));
+                int before = replayGame.Score;
+                replayGame.Step();
+                replaySteps++;
+                replayHunger = replayGame.Score != before ? 0 : replayHunger + 1;
+            }
+            else
+            {
+                // linger on the corpse for a moment, then deal a fresh board
+                replayDeadTicks++;
+                if (replayDeadTicks > Math.Max(6, (int)sliderReplaySpeed.Value))
+                {
+                    replayGames++;
+                    replayBest = Math.Max(replayBest, replayGame.Score);
+                    NewReplayGame(board);
+                }
+            }
+
+            snakeBoard.Refresh();
+            txtReplayInfo.Text = $"apples {replayGame.Score}   steps {replaySteps}   " +
+                                 $"game {replayGames + 1}   best {replayBest}";
+        }
+
+        private void BtnReplayPause_Click(object sender, RoutedEventArgs e)
+        {
+            if (replayTimer == null) return;
+            if (replayTimer.IsEnabled)
+            {
+                replayTimer.Stop();
+                btnReplayPause.Content = "Play";
+            }
+            else if (replayCandidate != null)
+            {
+                replayTimer.Start();
+                btnReplayPause.Content = "Pause";
+            }
+        }
+
+        private void BtnReplayNew_Click(object sender, RoutedEventArgs e)
+        {
+            if (replayGame != null)
+            {
+                replayGames++;
+                replayBest = Math.Max(replayBest, replayGame.Score);
+                NewReplayGame(replayGame.Width);
+            }
+        }
+
+        private void SliderReplaySpeed_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (replayTimer != null)
+                replayTimer.Interval = TimeSpan.FromMilliseconds(1000.0 / Math.Max(1, e.NewValue));
         }
 
         private void ShowBlackjackSnapshot(BlackjackSnapshot snap)
@@ -845,6 +1023,18 @@ namespace EvolutionaryStudio
                 tabsExaminer.SelectedItem = tabStrategy;
                 await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ApplicationIdle);
                 CapturePng(System.IO.Path.Combine(outputDir, "studio_blackjack.png"));
+
+                // a quick Snake run for the watch tab
+                cboMode.SelectedIndex = 2;
+                txtPopulation.Text = "150";
+                txtMaxGen.Text = "12";
+                txtStagnant.Text = "12";
+                await RunSnakeAsync();
+
+                tabsMain.SelectedIndex = 1;
+                tabsExaminer.SelectedItem = tabWatch;
+                await Task.Delay(1800);   // let the replay animate a few ticks
+                CapturePng(System.IO.Path.Combine(outputDir, "studio_snake.png"));
 
                 Console.WriteLine("screenshots written to " + outputDir);
                 return true;

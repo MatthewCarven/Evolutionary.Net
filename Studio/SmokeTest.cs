@@ -98,12 +98,40 @@ namespace EvolutionaryStudio
                 bool blackjackOk = bjFinal.Strategy != null && bjFinal.Tree != null && TreeStats.CountNodes(bjFinal.Tree) >= 1;
                 Console.WriteLine($"blackjack: fitness {bjFinal.FitnessText}, hard-16-vs-A action {sampleAction}, ok={blackjackOk}");
 
+                // quick Snake evolution: vote-tree steering, headless replay
+                var snakeConfig = new Model.Snake.SnakeConfig
+                {
+                    Board = 10,
+                    GamesPerEval = 2,
+                    EngineParams = new EngineParameters
+                    {
+                        PopulationSize = 60,
+                        MinGenerations = 1,
+                        MaxGenerations = 3,
+                        StagnantGenerationLimit = 3,
+                        ElitismRate = 0.05,
+                        CrossoverRate = 0.95,
+                        MutationRate = 0.05,
+                        RandomTreeMinDepth = 4,
+                        RandomTreeMaxDepth = 6,
+                        TourneySize = 3,
+                        SelectionStyle = SelectionStyle.Tourney
+                    }
+                };
+                var snakeRunner = new Model.Snake.SnakeRunner();
+                var snakeFinal = snakeRunner.RunAsync(snakeConfig).GetAwaiter().GetResult();
+                var (snakeApples, snakeSteps) = Model.Snake.SnakeRunner.PlayGame(snakeFinal.Candidate, 777, 10);
+                bool snakeOk = snakeFinal.Tree != null && snakeSteps > 0 &&
+                               TreeStats.CountNodes(snakeFinal.Tree) >= 1;
+                Console.WriteLine($"snake: fitness {snakeFinal.FitnessText}, " +
+                                  $"replay {snakeApples} apples / {snakeSteps} steps, ok={snakeOk}");
+
                 // bundled bike-sharing CSV must load: numeric columns kept, the date column dropped
                 var bike = ProblemPresets.All.Single(p => p.DisplayName.StartsWith("Bike")).Factory();
                 bool bikeOk = bike.Rows.Count > 700 && bike.Columns.Contains("cnt") && !bike.Columns.Contains("dteday");
                 Console.WriteLine($"bike csv: {bike.Rows.Count} rows, {bike.Columns.Count} numeric columns, ok={bikeOk}");
 
-                if (final.Tree == null || nodes < 1 || float.IsNaN(atHalf) || !cloneOk || !bikeOk || !blackjackOk)
+                if (final.Tree == null || nodes < 1 || float.IsNaN(atHalf) || !cloneOk || !bikeOk || !blackjackOk || !snakeOk)
                 {
                     Console.WriteLine("SMOKE FAIL");
                     return 1;

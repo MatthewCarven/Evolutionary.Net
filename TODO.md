@@ -19,6 +19,8 @@
 - [x] Save/load full setup as JSON (2026-09-20)
 - [x] GitHub Actions CI: build + smoke test on every push, Readme badge (2026-09-20)
 
+- [x] Snake mode in Studio: GP vote-trees + live Watch tab (2026-09-20)
+
 ## Later / ideas
 - [ ] Port the per-upcard Blackjack variant (10 small evolutions; should approach basic strategy)
 - [ ] Examiner: side-by-side compare of two snapshots

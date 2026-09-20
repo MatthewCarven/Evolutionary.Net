@@ -218,6 +218,7 @@ What it does:
 - **Live evolution view** — best/average fitness charted per generation while the engine runs on a background thread, with a full generation history table and a Stop button.
 - **Examiner** — every time the best-so-far improves, a snapshot is kept.  For any snapshot you can see the expression as readable infix math, a color-coded expression-tree diagram with zoom, node/depth/usage statistics, a predicted-vs-actual plot with MAE/RMSE/R² on both train and test data, and a playground for evaluating the tree at hand-typed variable values.
 - **Blackjack mode** — the Blackjack Strategy example, playable from the GUI: boolean trees vote Hit/Stand/Double/Split via stateful functions, fitness is chips won over thousands of simulated hands, and the examiner renders the evolved strategy as the classic color-coded hard/soft/pairs tables alongside the tree that produced it.
+- **Snake mode** — evolve a self-driving snake (rules ported from the author's Python Snake project). Each candidate is a decision tree steering in the snake's own frame of reference: terminal functions sense danger and food relative to the heading (`DangerAhead()`, `FoodLeft()`, …) and stateful vote functions steer (`TurnLeftIf(...)`). Fitness is apples-first with a hunger rule, and the Examiner's **Watch** tab plays the champion live on an animated board.
 - **Sharing results** — export the generation history as CSV; save the fitness chart, tree diagram, or strategy tables as PNGs; toggle a log-scale fitness axis to see late-run progress; and save/load the entire configuration as a JSON setup file so any run can be reproduced exactly.
 
 Every push is built and smoke-tested by GitHub Actions (the badge at the top of this page).
@@ -227,6 +228,7 @@ Every push is built and smoke-tested by GitHub Actions (the badge at the top of 
 ![Evolution view](images/studio_evolution.png)
 ![Examiner tree view](images/studio_examiner_tree.png)
 ![Blackjack strategy view](images/studio_blackjack.png)
+![Snake watch view](images/studio_snake.png)
 
 To support the examiner, the engine gained a small public inspection API (`TreeInspection.GetTreeInfo()` returns a `TreeNodeInfo` snapshot of a candidate's tree), and `CandidateSolution.Clone()` now re-points cloned nodes at the clone so cloned candidates evaluate correctly on their own.
 
