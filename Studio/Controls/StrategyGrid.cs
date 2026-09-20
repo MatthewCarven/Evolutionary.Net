@@ -11,7 +11,7 @@ namespace EvolutionaryStudio.Controls
     /// </summary>
     public class StrategyGrid : FrameworkElement
     {
-        private const double CellW = 27, CellH = 21, HeaderW = 38, TitleH = 22, Gap = 26, Margin = 12, LegendH = 34;
+        private const double CellW = 27, CellH = 21, HeaderW = 38, TitleH = 22, Gap = 26, Pad = 12, LegendH = 34;
 
         private static readonly string[] UpcardLabels = { "2", "3", "4", "5", "6", "7", "8", "9", "T", "A" };
         private static readonly Typeface Font = new("Segoe UI");
@@ -29,8 +29,8 @@ namespace EvolutionaryStudio.Controls
         private static double TableW => HeaderW + CellW * 10;
 
         private Size Extent => new(
-            Margin * 2 + TableW + Gap + TableW,
-            Margin * 2 + Math.Max(TableH(16), TableH(8) + Gap + TableH(10)) + LegendH);
+            Pad * 2 + TableW + Gap + TableW,
+            Pad * 2 + Math.Max(TableH(16), TableH(8) + Gap + TableH(10)) + LegendH);
 
         protected override Size MeasureOverride(Size availableSize) => Extent;
         protected override Size ArrangeOverride(Size finalSize) => Extent;
@@ -43,23 +43,23 @@ namespace EvolutionaryStudio.Controls
             double dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
 
             // hard totals, 20 down to 5
-            DrawTable(dc, dpi, Margin, Margin, "Hard totals", 16,
+            DrawTable(dc, dpi, Pad, Pad, "Hard totals", 16,
                 r => (20 - r).ToString(),
                 (col, r) => strategy.GetActionForHardHand(col, 20 - r));
 
             // soft hands, A-9 down to A-2
-            double rightX = Margin + TableW + Gap;
-            DrawTable(dc, dpi, rightX, Margin, "Soft hands", 8,
+            double rightX = Pad + TableW + Gap;
+            DrawTable(dc, dpi, rightX, Pad, "Soft hands", 8,
                 r => "A-" + (9 - r),
                 (col, r) => strategy.GetActionForSoftHand(col, 9 - r));
 
             // pairs, A-A down to 2-2 (rank index 9 = A, 8 = T, 7 = 9, ...)
-            double pairsY = Margin + TableH(8) + Gap;
+            double pairsY = Pad + TableH(8) + Gap;
             DrawTable(dc, dpi, rightX, pairsY, "Pairs", 10,
                 r => { string t = RankLabel(9 - r); return t + "-" + t; },
                 (col, r) => strategy.GetActionForPair(col, 9 - r));
 
-            DrawLegend(dc, dpi, Margin, Extent.Height - Margin - LegendH + 8);
+            DrawLegend(dc, dpi, Pad, Extent.Height - Pad - LegendH + 8);
         }
 
         private static string RankLabel(int rankIndex) => rankIndex switch
@@ -93,13 +93,13 @@ namespace EvolutionaryStudio.Controls
 
                 for (int col = 0; col < 10; col++)
                 {
-                    var (fill, letter, textBrush) = Style(action(col, r));
+                    var (fill, letter, textBrush) = ActionStyle(action(col, r));
                     DrawCell(dc, dpi, new Rect(x + HeaderW + col * CellW, rowY, CellW, CellH), fill, borderPen, letter, textBrush, true);
                 }
             }
         }
 
-        private static (Brush fill, string letter, Brush text) Style(ActionToTake action) => action switch
+        private static (Brush fill, string letter, Brush text) ActionStyle(ActionToTake action) => action switch
         {
             ActionToTake.Hit => (HitBrush, "H", Brushes.Black),
             ActionToTake.Stand => (StandBrush, "S", Brushes.White),
