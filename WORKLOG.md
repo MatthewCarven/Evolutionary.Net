@@ -1,5 +1,15 @@
 # Worklog — Evolutionary.Net GUI & Examiner
 
+## 2026-09-20
+
+- "Bells and whistles" pass to make the fork useful to others:
+  - GitHub Actions CI (`.github/workflows/build.yml`): builds Studio and runs `--smoke` on every push/PR; badge added to Readme.
+  - Exports: generation history → CSV; fitness chart / tree diagram / strategy tables → PNG (guarded against oversized trees).
+  - Log-scale fitness axis (`PlotCanvas.LogY`): decade ticks, sub-decade fallback, non-positives clamped; auto-disabled in Blackjack mode (negative chip scores).
+  - Save/Load setup: full configuration (mode, dataset preset or CSV path, target/input columns, primitive set, constants, engine params, blackjack settings) as JSON via toolbar buttons.
+  - Screenshot demo now also captures a log-scale frame (`images/studio_evolution_log.png`); all screenshots refreshed.
+- Verified: build clean, smoke passes, GUI launch check, log-scale render inspected.
+
 ## 2026-09-16
 
 - Cloned https://github.com/GregSommerville/Evolutionary.Net (genetic programming engine, C#, .NET Framework 4.6.1 class library, zero dependencies).

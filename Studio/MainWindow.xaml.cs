@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
 using Evolutionary;
@@ -28,6 +29,7 @@ namespace EvolutionaryStudio
         private PlotSeries bestSeries, avgSeries;
         private List<VarRow> playgroundRows;
         private bool suppressPresetEvent;
+        private string loadedCsvPath;
 
         private bool IsBlackjackMode => cboMode.SelectedIndex == 1;
 
@@ -67,6 +69,11 @@ namespace EvolutionaryStudio
 
             SetEngineParamDefaults(blackjack);
             plotFitness.YLabel = blackjack ? "Fitness (chips won)" : "Fitness (error)";
+
+            // chip scores are negative, so a log axis only makes sense for regression error
+            if (blackjack) chkLogScale.IsChecked = false;
+            chkLogScale.IsEnabled = !blackjack;
+            plotFitness.LogY = chkLogScale.IsChecked == true;
             txtRunStatus.Text = blackjack
                 ? "Blackjack mode — engine parameters set to the Blackjack defaults. Press Run."
                 : "Regression mode — engine parameters set to the regression defaults.";
@@ -96,6 +103,7 @@ namespace EvolutionaryStudio
             try
             {
                 ApplyDataset(preset.Factory(), preset);
+                loadedCsvPath = null;
             }
             catch (Exception ex)
             {
@@ -120,6 +128,7 @@ namespace EvolutionaryStudio
                 cboPreset.SelectedIndex = -1;
                 suppressPresetEvent = false;
                 ApplyDataset(ds, null);
+                loadedCsvPath = dialog.FileName;
             }
             catch (Exception ex)
             {
@@ -583,6 +592,213 @@ namespace EvolutionaryStudio
                 treeDiagram.LayoutTransform = new ScaleTransform(e.NewValue, e.NewValue);
         }
 
+        // ----- exports -------------------------------------------------------------
+
+        private void ChkLogScale_Changed(object sender, RoutedEventArgs e)
+        {
+            if (plotFitness == null) return;
+            plotFitness.LogY = chkLogScale.IsChecked == true;
+            plotFitness.Redraw();
+        }
+
+        private void BtnExportCsv_Click(object sender, RoutedEventArgs e)
+        {
+            if (history.Count == 0)
+            {
+                txtRunStatus.Text = "Nothing to export yet — run the engine first.";
+                return;
+            }
+            var dialog = new SaveFileDialog { Filter = "CSV file (*.csv)|*.csv", FileName = "generation-history.csv" };
+            if (dialog.ShowDialog(this) != true) return;
+
+            var lines = new List<string> { "generation,best_this_gen,avg_this_gen,best_so_far,ms_per_gen" };
+            foreach (var s in history.OrderBy(h => h.Generation))
+                lines.Add(string.Create(CultureInfo.InvariantCulture,
+                    $"{s.Generation},{s.BestThisGen},{s.AvgThisGen},{s.BestSoFar},{s.Milliseconds:0}"));
+            System.IO.File.WriteAllLines(dialog.FileName, lines);
+            txtRunStatus.Text = "Wrote " + dialog.FileName;
+        }
+
+        private void BtnSaveChart_Click(object sender, RoutedEventArgs e) => SaveElementPng(plotFitness, "fitness-chart.png");
+
+        private void BtnSaveTree_Click(object sender, RoutedEventArgs e)
+        {
+            if (treeDiagram.Root == null) { txtRunStatus.Text = "No tree selected yet."; return; }
+            SaveElementPng(treeDiagram, "expression-tree.png");
+        }
+
+        private void BtnSaveStrategy_Click(object sender, RoutedEventArgs e)
+        {
+            if (strategyGrid.Strategy == null) { txtRunStatus.Text = "No strategy yet — run a Blackjack evolution first."; return; }
+            SaveElementPng(strategyGrid, "blackjack-strategy.png");
+        }
+
+        private void SaveElementPng(FrameworkElement element, string suggestedName)
+        {
+            if (element.ActualWidth < 4 || element.ActualHeight < 4)
+            {
+                txtRunStatus.Text = "Nothing to save yet.";
+                return;
+            }
+            if (element.ActualWidth * element.ActualHeight > 40_000_000)
+            {
+                txtRunStatus.Text = "Too large to export as a PNG — use the expression text instead.";
+                return;
+            }
+            var dialog = new SaveFileDialog { Filter = "PNG image (*.png)|*.png", FileName = suggestedName };
+            if (dialog.ShowDialog(this) != true) return;
+
+            var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                (int)Math.Ceiling(element.ActualWidth), (int)Math.Ceiling(element.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(element);
+            var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+            using var stream = System.IO.File.Create(dialog.FileName);
+            encoder.Save(stream);
+            txtRunStatus.Text = "Wrote " + dialog.FileName;
+        }
+
+        // ----- setup save / load ----------------------------------------------------
+
+        private sealed class StudioSetup
+        {
+            public int Mode { get; set; }
+            public int PresetIndex { get; set; } = -1;
+            public string CsvPath { get; set; }
+            public string TargetColumn { get; set; }
+            public List<string> InputColumns { get; set; } = new();
+            public double TrainPercent { get; set; } = 75;
+            public int MetricIndex { get; set; }
+            public List<string> Functions { get; set; } = new();
+            public string Constants { get; set; }
+            public string Population { get; set; }
+            public string MinGenerations { get; set; }
+            public string MaxGenerations { get; set; }
+            public string StagnantLimit { get; set; }
+            public string ElitismRate { get; set; }
+            public string CrossoverRate { get; set; }
+            public string MutationRate { get; set; }
+            public string TreeMinDepth { get; set; }
+            public string TreeMaxDepth { get; set; }
+            public int SelectionIndex { get; set; }
+            public string TourneySize { get; set; }
+            public string BlackjackHands { get; set; }
+            public string BlackjackDecks { get; set; }
+            public bool BlackjackStack { get; set; }
+        }
+
+        private void BtnSaveSetup_Click(object sender, RoutedEventArgs e)
+        {
+            var setup = new StudioSetup
+            {
+                Mode = cboMode.SelectedIndex,
+                PresetIndex = cboPreset.SelectedIndex,
+                CsvPath = loadedCsvPath,
+                TargetColumn = cboTarget.SelectedItem as string,
+                InputColumns = columnChoices.Where(c => c.IsSelected).Select(c => c.Name).ToList(),
+                TrainPercent = sliderTrain.Value,
+                MetricIndex = cboMetric.SelectedIndex,
+                Functions = functionDefs.Where(f => f.IsSelected).Select(f => f.Name).ToList(),
+                Constants = txtConstants.Text,
+                Population = txtPopulation.Text,
+                MinGenerations = txtMinGen.Text,
+                MaxGenerations = txtMaxGen.Text,
+                StagnantLimit = txtStagnant.Text,
+                ElitismRate = txtElitism.Text,
+                CrossoverRate = txtCrossover.Text,
+                MutationRate = txtMutation.Text,
+                TreeMinDepth = txtMinDepth.Text,
+                TreeMaxDepth = txtMaxDepth.Text,
+                SelectionIndex = cboSelection.SelectedIndex,
+                TourneySize = txtTourney.Text,
+                BlackjackHands = txtBjHands.Text,
+                BlackjackDecks = txtBjDecks.Text,
+                BlackjackStack = chkBjStack.IsChecked == true
+            };
+
+            var dialog = new SaveFileDialog { Filter = "Studio setup (*.json)|*.json", FileName = "studio-setup.json" };
+            if (dialog.ShowDialog(this) != true) return;
+            System.IO.File.WriteAllText(dialog.FileName,
+                JsonSerializer.Serialize(setup, new JsonSerializerOptions { WriteIndented = true }));
+            txtRunStatus.Text = "Wrote " + dialog.FileName;
+        }
+
+        private void BtnLoadSetup_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new OpenFileDialog { Filter = "Studio setup (*.json)|*.json", Title = "Load a Studio setup" };
+            if (dialog.ShowDialog(this) != true) return;
+            try
+            {
+                var setup = JsonSerializer.Deserialize<StudioSetup>(System.IO.File.ReadAllText(dialog.FileName));
+                ApplySetup(setup);
+                txtRunStatus.Text = "Loaded setup from " + dialog.FileName;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Could not load this setup:\n\n" + ex.Message, "Setup load failed",
+                                MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private void ApplySetup(StudioSetup setup)
+        {
+            // mode first — switching it resets the engine-parameter boxes to that mode's defaults
+            if (setup.Mode is 0 or 1)
+                cboMode.SelectedIndex = setup.Mode;
+
+            // dataset: a saved CSV path wins; otherwise the preset index
+            if (!string.IsNullOrEmpty(setup.CsvPath) && System.IO.File.Exists(setup.CsvPath))
+            {
+                suppressPresetEvent = true;
+                cboPreset.SelectedIndex = -1;
+                suppressPresetEvent = false;
+                ApplyDataset(CsvLoader.Load(setup.CsvPath), null);
+                loadedCsvPath = setup.CsvPath;
+            }
+            else if (setup.PresetIndex >= 0 && setup.PresetIndex < presets.Count && cboPreset.SelectedIndex != setup.PresetIndex)
+            {
+                cboPreset.SelectedIndex = setup.PresetIndex;
+            }
+
+            if (setup.TargetColumn != null && currentDataset != null && currentDataset.Columns.Contains(setup.TargetColumn))
+                cboTarget.SelectedItem = setup.TargetColumn;
+            if (setup.InputColumns is { Count: > 0 })
+                foreach (var choice in columnChoices)
+                    choice.IsSelected = setup.InputColumns.Contains(choice.Name);
+
+            if (setup.TrainPercent is >= 50 and <= 95) sliderTrain.Value = setup.TrainPercent;
+            if (setup.MetricIndex is 0 or 1) cboMetric.SelectedIndex = setup.MetricIndex;
+
+            if (setup.Functions is { Count: > 0 })
+            {
+                foreach (var def in functionDefs)
+                    def.IsSelected = setup.Functions.Contains(def.Name);
+                // checkbox bindings don't observe plain properties, so rebind
+                icFunctions.ItemsSource = null;
+                icFunctions.ItemsSource = functionDefs;
+            }
+            if (setup.Constants != null) txtConstants.Text = setup.Constants;
+
+            static void Set(System.Windows.Controls.TextBox box, string value)
+            {
+                if (!string.IsNullOrEmpty(value)) box.Text = value;
+            }
+            Set(txtPopulation, setup.Population);
+            Set(txtMinGen, setup.MinGenerations);
+            Set(txtMaxGen, setup.MaxGenerations);
+            Set(txtStagnant, setup.StagnantLimit);
+            Set(txtElitism, setup.ElitismRate);
+            Set(txtCrossover, setup.CrossoverRate);
+            Set(txtMutation, setup.MutationRate);
+            Set(txtMinDepth, setup.TreeMinDepth);
+            Set(txtMaxDepth, setup.TreeMaxDepth);
+            if (setup.SelectionIndex is >= 0 and <= 2) cboSelection.SelectedIndex = setup.SelectionIndex;
+            Set(txtTourney, setup.TourneySize);
+            Set(txtBjHands, setup.BlackjackHands);
+            Set(txtBjDecks, setup.BlackjackDecks);
+            chkBjStack.IsChecked = setup.BlackjackStack;
+        }
+
         // ----- screenshot demo mode (used by "--screenshot <dir>") ---------------
 
         internal async Task<bool> RunScreenshotDemoAsync(string outputDir)
@@ -602,6 +818,11 @@ namespace EvolutionaryStudio
                 tabsMain.SelectedIndex = 0;
                 await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ApplicationIdle);
                 CapturePng(System.IO.Path.Combine(outputDir, "studio_evolution.png"));
+
+                chkLogScale.IsChecked = true;
+                await System.Windows.Threading.Dispatcher.Yield(System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                CapturePng(System.IO.Path.Combine(outputDir, "studio_evolution_log.png"));
+                chkLogScale.IsChecked = false;
 
                 tabsMain.SelectedIndex = 1;
                 tabsExaminer.SelectedIndex = 0;

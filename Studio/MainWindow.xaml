@@ -20,7 +20,13 @@
                     <Button x:Name="btnRun" Style="{StaticResource RunButton}" Content="▶  Run" Click="BtnRun_Click"/>
                     <Button x:Name="btnStop" Style="{StaticResource StopButton}" Content="■  Stop" IsEnabled="False" Click="BtnStop_Click"/>
                 </StackPanel>
-                <TextBlock x:Name="txtRunStatus" VerticalAlignment="Center" Margin="18,0,0,0" Text="Ready — pick a problem and press Run." FontSize="13"/>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                    <Button x:Name="btnSaveSetup" Content="Save setup…" Padding="10,4" Margin="0,0,8,0" Click="BtnSaveSetup_Click"
+                            ToolTip="Save the whole configuration (mode, problem, primitives, engine parameters) as a JSON file"/>
+                    <Button x:Name="btnLoadSetup" Content="Load setup…" Padding="10,4" Click="BtnLoadSetup_Click"
+                            ToolTip="Restore a configuration saved with 'Save setup'"/>
+                </StackPanel>
+                <TextBlock x:Name="txtRunStatus" VerticalAlignment="Center" Margin="18,0,12,0" Text="Ready — pick a problem and press Run." FontSize="13"/>
             </DockPanel>
         </Border>
 
@@ -182,9 +188,19 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
-                                <CheckBox x:Name="chkShowAvg" Content="Show average fitness (clipped to chart range)"
-                                          IsChecked="True" Margin="10,8,0,0"
-                                          Checked="ChkShowAvg_Changed" Unchecked="ChkShowAvg_Changed"/>
+                                <DockPanel Margin="10,8,10,0">
+                                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                                        <Button x:Name="btnExportCsv" Content="Export history CSV…" Padding="8,2" Margin="0,0,8,0" Click="BtnExportCsv_Click"/>
+                                        <Button x:Name="btnSaveChart" Content="Save chart PNG…" Padding="8,2" Click="BtnSaveChart_Click"/>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <CheckBox x:Name="chkShowAvg" Content="Show average fitness (clipped to chart range)"
+                                                  IsChecked="True" Checked="ChkShowAvg_Changed" Unchecked="ChkShowAvg_Changed"/>
+                                        <CheckBox x:Name="chkLogScale" Content="Log scale" Margin="18,0,0,0"
+                                                  ToolTip="Log₁₀ fitness axis — shows late-run progress that looks flat on a linear axis"
+                                                  Checked="ChkLogScale_Changed" Unchecked="ChkLogScale_Changed"/>
+                                    </StackPanel>
+                                </DockPanel>
                                 <controls:PlotCanvas x:Name="plotFitness" Grid.Row="1" Margin="4"/>
                             </Grid>
                         </Border>
@@ -246,8 +262,12 @@
                                         <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
                                             <controls:StrategyGrid x:Name="strategyGrid" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="6"/>
                                         </ScrollViewer>
-                                        <TextBlock x:Name="txtStrategyInfo" Grid.Row="1" Margin="12,4,12,10"
-                                                   FontFamily="Consolas" FontSize="13" TextWrapping="Wrap"/>
+                                        <DockPanel Grid.Row="1" Margin="12,4,12,10">
+                                            <Button x:Name="btnSaveStrategy" Content="Save PNG…" Padding="8,2" DockPanel.Dock="Right"
+                                                    VerticalAlignment="Bottom" Click="BtnSaveStrategy_Click"/>
+                                            <TextBlock x:Name="txtStrategyInfo" Margin="0,0,12,0"
+                                                       FontFamily="Consolas" FontSize="13" TextWrapping="Wrap"/>
+                                        </DockPanel>
                                     </Grid>
                                 </TabItem>
                                 <TabItem x:Name="tabTree" Header="Tree">
@@ -264,6 +284,7 @@
                                             <Border Background="#3E9B4F" CornerRadius="3" Padding="6,1" Margin="0,0,6,0"><TextBlock Text="variable" Foreground="White" FontSize="11"/></Border>
                                             <Border Background="#D88A2A" CornerRadius="3" Padding="6,1" Margin="0,0,6,0"><TextBlock Text="constant" Foreground="White" FontSize="11"/></Border>
                                             <Border Background="#8E5BC0" CornerRadius="3" Padding="6,1"><TextBlock Text="terminal fn" Foreground="White" FontSize="11"/></Border>
+                                            <Button x:Name="btnSaveTree" Content="Save PNG…" Padding="8,2" Margin="18,0,0,0" Click="BtnSaveTree_Click"/>
                                         </StackPanel>
                                         <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="White">
                                             <controls:TreeDiagram x:Name="treeDiagram"/>

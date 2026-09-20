@@ -27,6 +27,7 @@ namespace EvolutionaryStudio.Controls
         public string XLabel { get; set; }
         public string YLabel { get; set; }
         public bool ShowYEqualsX { get; set; }
+        public bool LogY { get; set; }   // log₁₀ Y axis; non-positive values are clamped to the decade below the smallest positive
 
         public void SetSeries(params PlotSeries[] newSeries)
         {
@@ -73,6 +74,34 @@ namespace EvolutionaryStudio.Controls
                 double lo = Math.Min(minX, minY), hi = Math.Max(maxX, maxY);
                 minX = minY = lo; maxX = maxY = hi;
             }
+
+            // optionally move the Y axis into log10 space (bounds and drawing both use TY)
+            bool logActive = false;
+            double logFloor = 0;
+            if (LogY)
+            {
+                double minPositive = double.MaxValue;
+                foreach (var s in series)
+                    foreach (var p in s.Points)
+                        if (!double.IsNaN(p.Y) && !double.IsInfinity(p.Y) && p.Y > 0 && p.Y < minPositive)
+                            minPositive = p.Y;
+                if (minPositive < double.MaxValue)
+                {
+                    logActive = true;
+                    logFloor = minPositive / 10;
+                    minY = double.MaxValue; maxY = double.MinValue;
+                    foreach (var s in series.Where(s => s.AutoScale))
+                        foreach (var p in s.Points)
+                        {
+                            if (double.IsNaN(p.Y) || double.IsInfinity(p.Y)) continue;
+                            double logValue = Math.Log10(Math.Max(p.Y, logFloor));
+                            minY = Math.Min(minY, logValue);
+                            maxY = Math.Max(maxY, logValue);
+                        }
+                }
+            }
+            double TY(double y) => logActive ? Math.Log10(Math.Max(y, logFloor)) : y;
+
             if (maxX - minX < 1e-9) { minX -= 1; maxX += 1; }
             if (maxY - minY < 1e-9) { minY -= 1; maxY += 1; }
 
@@ -81,7 +110,8 @@ namespace EvolutionaryStudio.Controls
             minY -= padY; maxY += padY;
 
             double ScaleX(double x) => plot.Left + (x - minX) / (maxX - minX) * plot.Width;
-            double ScaleY(double y) => plot.Bottom - (y - minY) / (maxY - minY) * plot.Height;
+            double ScaleY(double y) => plot.Bottom - (TY(y) - minY) / (maxY - minY) * plot.Height;
+            double ScaleYAxis(double transformed) => plot.Bottom - (transformed - minY) / (maxY - minY) * plot.Height;
 
             var gridPen = new Pen(new SolidColorBrush(Color.FromRgb(232, 235, 240)), 1);
             var axisPen = new Pen(new SolidColorBrush(Color.FromRgb(150, 155, 165)), 1);
@@ -94,11 +124,11 @@ namespace EvolutionaryStudio.Controls
                 var label = Text(FormatTick(tx), 10, Brushes.DimGray, pixelsPerDip);
                 dc.DrawText(label, new Point(px - label.Width / 2, plot.Bottom + 4));
             }
-            foreach (double ty in NiceTicks(minY, maxY, 5))
+            foreach (double ty in logActive ? LogTicks(minY, maxY) : NiceTicks(minY, maxY, 5))
             {
-                double py = ScaleY(ty);
+                double py = ScaleYAxis(ty);
                 dc.DrawLine(gridPen, new Point(plot.Left, py), new Point(plot.Right, py));
-                var label = Text(FormatTick(ty), 10, Brushes.DimGray, pixelsPerDip);
+                var label = Text(FormatTick(logActive ? Math.Pow(10, ty) : ty), 10, Brushes.DimGray, pixelsPerDip);
                 dc.DrawText(label, new Point(plot.Left - label.Width - 6, py - label.Height / 2));
             }
 
@@ -187,6 +217,20 @@ namespace EvolutionaryStudio.Controls
             double tick = Math.Ceiling(min / step) * step;
             for (; tick <= max + step * 1e-6; tick += step)
                 yield return tick;
+        }
+
+        private static IEnumerable<double> LogTicks(double min, double max)
+        {
+            // one tick per decade; fall back to generic ticks when the range is under a decade
+            var ticks = new List<double>();
+            for (double e = Math.Ceiling(min); e <= Math.Floor(max) + 1e-9; e += 1)
+                ticks.Add(e);
+            if (ticks.Count < 2)
+            {
+                ticks.Clear();
+                ticks.AddRange(NiceTicks(min, max, 5));
+            }
+            return ticks;
         }
 
         private static string FormatTick(double v)
